@@ -1,3 +1,4 @@
+import json
 import select
 import socket
 import threading
@@ -61,9 +62,20 @@ class Handler(threading.Thread):
     def __request(self, request):
         """Returns file content for client request"""
 
+        # TODO Create header parsing function
         # Parse headers
-        headers = request.split('\n')
-        request_header = headers[0].split()
+        headers_body = request.splitlines()
+        body_index = headers_body.index("")
+        headers = {}
+        for header in headers_body[1:body_index]:
+            key, value = header.split(": ")
+            headers[key] = value
+        try:
+            body = headers_body[body_index + 1:][0]
+        except IndexError:
+            body = ""
+
+        request_header = headers_body[0].split()
         method = request_header[0]
         url = request_header[1]
 
@@ -81,7 +93,18 @@ class Handler(threading.Thread):
             except FileNotFoundError:
                 return None, None, 404  # Not Found
         elif method == "POST":
-            pass  # TODO Implement POST method
+            if headers["Content-Type"] != "application/x-www-form-urlencoded":
+                return None, None, 415  # Unsupported Media Type
+
+            response = {}
+
+            if len(body) > 0:
+                parameters = body.split("&")
+                for parameter in parameters:
+                    key, value = parameter.split("=")
+                    response[key] = value
+
+            return json.dumps(response).encode(settings.ENCODING), "application/json", 201  # Created
         else:
             return None, None, 501  # Not Implemented
 
@@ -93,9 +116,14 @@ class Handler(threading.Thread):
         # Build HTTP response
         if status_code == 200:
             status = "200 OK"
+        elif status_code == 201:
+            status = "201 Created"
         elif status_code == 404:
             status = "404 Not Found"
             content = "Requested resource not found".encode(settings.ENCODING)
+        elif status_code == 415:
+            status = "415 Unsupported Media Type"
+            content = "Post content-type is not supported by the server".encode(settings.ENCODING)
         elif status_code == 501:
             status = "501 Not Implemented"
             content = "Request method is not supported by the server".encode(settings.ENCODING)
@@ -106,7 +134,7 @@ class Handler(threading.Thread):
             content = "An internal server error occurred while processing your request".encode(settings.ENCODING)
 
         if content_type is None:
-            content_type = "text/html"
+            content_type = "text/plain"
 
         headers.append("HTTP/1.1 %s" % status)
         headers.append("Date: %s" % datetime.utcnow().strftime("%a, %d %b %Y %H:%M:%S GMT"))
@@ -117,6 +145,6 @@ class Handler(threading.Thread):
         header = "\n".join(headers)
         response = (header + "\n\n").encode(settings.ENCODING)
         response += content
-        print(response)
+
         # Return encoded response
         return response
