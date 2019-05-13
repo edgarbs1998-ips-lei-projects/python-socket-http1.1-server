@@ -6,12 +6,19 @@ import settings
 # Create socket
 from handler import Handler
 
+# Logger class
+from logger import Logger
+
+log = Logger(settings.LOG_FILE, settings.LOG_FORMAT, settings.DATETIME_FORMAT)
 server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 server_socket.bind((settings.SERVER_HOST, settings.SERVER_PORT))
 server_socket.listen()
-print("[%s] Server listening on host %s and port %s ..."
-      % (datetime.now().strftime(settings.DATETIME_FORMAT), settings.SERVER_HOST, settings.SERVER_PORT))
+
+# print("[%s] Server listening on host %s and port %s ..."
+#     % (datetime.now().strftime(settings.DATETIME_FORMAT), settings.SERVER_HOST, settings.SERVER_PORT))
+
+log.info("Server listening on host %s and port %s ..." % (settings.SERVER_HOST, settings.SERVER_PORT))
 
 while True:
     # Wait for client connections
@@ -21,7 +28,7 @@ while True:
     client_connection.settimeout(settings.SOCKET_TIMEOUT)
 
     # Start a new thread for the client
-    Handler(client_connection, client_address).start()
+    Handler(client_connection, client_address, log).start()
 
 # Close socket
 server_socket.close()

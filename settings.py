@@ -10,6 +10,10 @@ KEEP_ALIVE_SECONDS = 10
 BUFSIZE = 4096
 ENCODING = "utf-8"
 
+# Log settings
+LOG_FILE = "./log/log.txt"
+LOG_FORMAT = "[%(asctime)s - %(levelname)s] - %(message)s"
+
 # Private auth
 PRIVATE_USERNAME = "admin"
 PRIVATE_PASSWORD = "qwerty"
