@@ -1,5 +1,8 @@
+import base64
+import imghdr
 import json
 import select
+import sndhdr
 import socket
 import threading
 from datetime import datetime
@@ -42,13 +45,16 @@ class Handler(threading.Thread):
                               % (self.__address, request))
 
                 # Handle client request
-                content, content_type, status = self.__request(request)
+                content, content_type, status, keep_live = self.__request(request)
 
                 # Prepare HTTP response
                 response = self.__response(status, content, content_type)
 
                 # Return HTTP response
                 self.__connection.sendall(response)
+
+                if keep_live is False:
+                    break
 
             # Close client connection
             self.__connection.shutdown(socket.SHUT_RDWR)
@@ -80,26 +86,52 @@ class Handler(threading.Thread):
         except IndexError:
             body = ""
 
+        keep_alive = True
+        if "Connection" in headers and headers["Connection"] == "close":
+            keep_alive = False
+
         request_header = headers_body[0].split()
         method = request_header[0]
-        url = request_header[1]
+        filename = request_header[1]
 
         if method == "HEAD" or method == "GET":
-            filename = url
+            # TODO Improve auth code
+            if filename.startswith("/private/"):
+                user_pass = settings.PRIVATE_USERNAME + ":" + settings.PRIVATE_PASSWORD
+                base64_auth = base64.b64encode(user_pass.encode("utf-8"))
+
+                if "Authorization" in headers:
+                    auth_method, auth_credentials = headers["Authorization"].split()
+                    auth_credentials = auth_credentials.encode("utf-8")
+                    if auth_credentials != base64_auth:
+                        return None, None, 401, keep_alive
+                else:
+                    return None, None, 401, keep_alive
+
             if filename == "/":
                 filename = "/index.html"
 
-            content_type = "text/html"  # TODO Set the correct content type
+            # TODO Improve file type detection code
+            image_type = imghdr.what(settings.HTDOCS_PATH + filename)
+            if image_type is not None:
+                content_type = "image/" + image_type
+            else:
+                # TODO Support better audio files
+                sound_type = sndhdr.what(settings.HTDOCS_PATH + filename)
+                if sound_type is not None:
+                    content_type = "audio/" + sound_type[0]
+                else:
+                    content_type = "text/html"
 
             try:
                 # Return file content
                 with open(settings.HTDOCS_PATH + filename, "rb") as file:
-                    return file.read(), content_type, "HEAD" if method == "HEAD" else 200  # HEAD / OK
+                    return file.read(), content_type, "HEAD" if method == "HEAD" else 200, keep_alive  # HEAD / OK
             except FileNotFoundError:
-                return None, None, 404  # Not Found
+                return None, None, 404, keep_alive  # Not Found
         elif method == "POST":
             if headers["Content-Type"] != "application/x-www-form-urlencoded":
-                return None, None, 415  # Unsupported Media Type
+                return None, None, 415, keep_alive  # Unsupported Media Type
 
             response = {}
 
@@ -109,9 +141,9 @@ class Handler(threading.Thread):
                     key, value = parameter.split("=")
                     response[key] = value
 
-            return json.dumps(response).encode(settings.ENCODING), "application/json", 201  # Created
+            return json.dumps(response).encode(settings.ENCODING), "application/json", 201, keep_alive  # Created
         else:
-            return None, None, 501  # Not Implemented
+            return None, None, 501, keep_alive  # Not Implemented
 
     def __response(self, status_code, content, content_type):
         """Returns HTTP response"""
@@ -123,6 +155,9 @@ class Handler(threading.Thread):
             status = "200 OK"
         elif status_code == 201:
             status = "201 Created"
+        elif status_code == 401:
+            status = "401 Unauthorized Status"
+            headers.append("WWW-Authenticate: Basic realm='Access Private Folder', charset='UTF-8'")
         elif status_code == 404:
             status = "404 Not Found"
             content = "Requested resource not found".encode(settings.ENCODING)
@@ -138,10 +173,12 @@ class Handler(threading.Thread):
             status = "500 Internal Server Error"
             content = "An internal server error occurred while processing your request".encode(settings.ENCODING)
 
+        if content is None:
+            content = "".encode(settings.ENCODING)
         if content_type is None:
             content_type = "text/plain"
 
-        headers.append("HTTP/1.1 %s" % status)
+        headers.insert(0, "HTTP/1.1 %s" % status)
         headers.append("Date: %s" % datetime.utcnow().strftime("%a, %d %b %Y %H:%M:%S GMT"))
         headers.append("Connection: keep-alive")
         headers.append("Content-Type: %s" % content_type)
