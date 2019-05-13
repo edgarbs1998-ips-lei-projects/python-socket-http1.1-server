@@ -3,4 +3,5 @@
 - Can we use a library for log?
 - Is the cache system implemented on server side? Should we keep the 2 most read files open in RAM?
 - How to test 'Connection: close'?
-- Is using thread for each socket connection considered "programaçao assíncrona no lado do seridor"? (Used select.select for socket keep alive for 10 seconds)
+- Is using thread for each socket connection considered "programaÃ§ao assÃ­ncrona no lado do servidor"? (Used select.select for socket keep alive for 10 seconds)
+- After adding authentication for private folder we won't have anymore 403 error

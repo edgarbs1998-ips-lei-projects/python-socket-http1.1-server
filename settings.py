@@ -9,3 +9,7 @@ KEEP_ALIVE_SECONDS = 10
 # Communication settings
 BUFSIZE = 4096
 ENCODING = "utf-8"
+
+# Private auth
+PRIVATE_USERNAME = "admin"
+PRIVATE_PASSWORD = "qwerty"
