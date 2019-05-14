@@ -1,7 +1,6 @@
 - Can not we read all files in binary with 'rb' and ignore encode for content, and encode only header and then concatenate headers with content?
 - Can we use library to identify file type instead of relaying on file extension?
-- Can we use a library for log?
 - Is the cache system implemented on server side? Should we keep the 2 most read files open in RAM?
-- How to test 'Connection: close'?
 - Is using thread for each socket connection considered "programaçao assíncrona no lado do servidor"? (Used select.select for socket keep alive for 10 seconds)
 - After adding authentication for private folder we won't have anymore 403 error
+- How could we implement DELETE and PUT methods to server

@@ -11,8 +11,9 @@ BUFSIZE = 4096
 ENCODING = "utf-8"
 
 # Log settings
-LOG_FILE = "./log/log.txt"
+LOG_FILE = "./logs/log.txt"
 LOG_FORMAT = "[%(asctime)s - %(levelname)s] - %(message)s"
+LOG_LEVEL = "DEBUG"
 
 # Private auth
 PRIVATE_USERNAME = "admin"

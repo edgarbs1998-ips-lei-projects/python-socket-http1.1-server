@@ -213,3 +213,6 @@ dmypy.json
 
 # Ignore pickle persistence files
 *.pickle
+
+# Ignore logs folder
+logs/
