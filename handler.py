@@ -103,10 +103,7 @@ def __request(method, url, headers, body, keep_alive):
         if url == "/":
             url = "/index.html"
 
-        print(mimetypes.guess_type(settings.HTDOCS_PATH + url, True))
         file_type, file_encoding = mimetypes.guess_type(settings.HTDOCS_PATH + url, True)
-        print(file_type)
-        print(file_encoding)
 
         try:
             # Return file content

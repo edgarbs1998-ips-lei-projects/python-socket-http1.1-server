@@ -215,4 +215,5 @@ dmypy.json
 *.pickle
 
 # Ignore logs folder
-logs/
+logs/*
+!logs/.gitkeep
