@@ -1,0 +1,2 @@
+﻿- Added favicon support (Chrome auto request favicon to the server)
+- Added GIF, BMP,

@@ -1,6 +1,7 @@
 import base64
 import imghdr
 import json
+import mimetypes
 import select
 import sndhdr
 import socket
@@ -34,10 +35,10 @@ def thread(connection, address):
             method, url, headers, body, keep_alive = __parse_header(request)
 
             # Handle client request
-            content, content_type, status, keep_live = __request(method, url, headers, body, keep_alive)
+            content, content_type, content_encoding, status, keep_live = __request(method, url, headers, body, keep_alive)
 
             # Prepare HTTP response
-            response = __response(status, content, content_type)
+            response = __response(status, content, content_type, content_encoding)
 
             # Return HTTP response
             connection.sendall(response)
@@ -92,37 +93,30 @@ def __request(method, url, headers, body, keep_alive):
                 (settings.PRIVATE_USERNAME + ":" + settings.PRIVATE_PASSWORD).encode("utf-8"))
 
             if "Authorization" not in headers:
-                return None, None, 401, keep_alive
+                return None, None, None, 401, keep_alive
 
             auth_method, auth_credentials = headers["Authorization"].split()
             auth_credentials = auth_credentials.encode("utf-8")
             if auth_credentials != base64_auth:
-                return None, None, 401, keep_alive
+                return None, None, None, 401, keep_alive
 
         if url == "/":
             url = "/index.html"
 
-        # TODO Improve file type detection code
-        image_type = imghdr.what(settings.HTDOCS_PATH + url)
-        if image_type is not None:
-            content_type = "image/" + image_type
-        else:
-            # TODO Support better audio files
-            sound_type = sndhdr.what(settings.HTDOCS_PATH + url)
-            if sound_type is not None:
-                content_type = "audio/" + sound_type[0]
-            else:
-                content_type = "text/html"
+        print(mimetypes.guess_type(settings.HTDOCS_PATH + url, True))
+        file_type, file_encoding = mimetypes.guess_type(settings.HTDOCS_PATH + url, True)
+        print(file_type)
+        print(file_encoding)
 
         try:
             # Return file content
             with open(settings.HTDOCS_PATH + url, "rb") as file:
-                return file.read(), content_type, "HEAD" if method == "HEAD" else 200, keep_alive  # HEAD / OK
+                return file.read(), file_type, file_encoding, "HEAD" if method == "HEAD" else 200, keep_alive  # HEAD / OK
         except FileNotFoundError:
-            return None, None, 404, keep_alive  # Not Found
+            return None, None, None, 404, keep_alive  # Not Found
     elif method == "POST":
         if headers["Content-Type"] != "application/x-www-form-urlencoded":
-            return None, None, 415, keep_alive  # Unsupported Media Type
+            return None, None, None, 415, keep_alive  # Unsupported Media Type
 
         response = {}
 
@@ -132,12 +126,12 @@ def __request(method, url, headers, body, keep_alive):
                 key, value = parameter.split("=")
                 response[key] = value
 
-        return json.dumps(response).encode(settings.ENCODING), "application/json", 201, keep_alive  # Created
+        return json.dumps(response).encode(settings.ENCODING), "application/json", "utf-8", 201, keep_alive  # Created
     else:
-        return None, None, 501, keep_alive  # Not Implemented
+        return None, None, None, 501, keep_alive  # Not Implemented
 
 
-def __response(status_code, content, content_type):
+def __response(status_code, content, content_type, content_encoding):
     """Returns HTTP response"""
 
     headers = []
@@ -175,6 +169,9 @@ def __response(status_code, content, content_type):
     headers.append("Connection: keep-alive")
     headers.append("Content-Type: %s" % content_type)
     headers.append("Content-Length: %d" % len(content))
+
+    if content_encoding is not None:
+        headers.append("Content-Encoding: %s" % content_encoding)
 
     header = "\n".join(headers)
     response = (header + "\n\n").encode(settings.ENCODING)
