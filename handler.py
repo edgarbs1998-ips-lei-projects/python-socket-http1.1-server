@@ -185,7 +185,7 @@ def __request(method, url, headers, body, keep_alive, log):
                 os.remove("%s/%s.json" % (settings.UPLOADED_USER_PATH, response["generated-id"]))
 
                 # Send log to server log file
-                log.trace().info("Rewrited file in path %s/%s.json"
+                log.trace().info("Deleted file in path %s/%s.json"
                                  % (settings.UPLOADED_USER_PATH, response["generated-id"]))
 
         # Return response to client
