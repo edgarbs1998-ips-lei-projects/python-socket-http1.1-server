@@ -113,10 +113,12 @@ def __request(method, url, headers, body, keep_alive, log):
                 return file.read(), file_type, file_encoding, "HEAD" if method == "HEAD" else 200, keep_alive  # HEAD / OK
         except FileNotFoundError:
             return None, None, None, 404, keep_alive  # Not Found
+
     elif method == "POST":
         if headers["Content-Type"] != "application/x-www-form-urlencoded":
             return None, None, None, 415, keep_alive  # Unsupported Media Type
 
+        # Get parameters from request
         response = {}
 
         if len(body) > 0:
@@ -125,25 +127,69 @@ def __request(method, url, headers, body, keep_alive, log):
                 key, value = parameter.split("=")
                 response[key] = value
 
-        if response["firstname"]:
-            if os.path.exists("%s/%s.json" % (settings.UPLOADED_USER_PATH, response["firstname"])):
-                # Open user json file and write user data
-                _file = open("%s/%s.json" % (settings.UPLOADED_USER_PATH, response["firstname"]), "w+")
-                _file.write(json.dumps(response))
-                #Send log to server log file
-                log.trace().info("Rewrited file in path %s/%s.json"
-                                 % (settings.UPLOADED_USER_PATH, response["firstname"]))
-            else:
-                # Create user json file
-                _create_file = open("%s/%s.json" % (settings.UPLOADED_USER_PATH, response["firstname"]), "x")
-                # Open user json file and write user data
-                _file = open("%s/%s.json" % (settings.UPLOADED_USER_PATH, response["firstname"]), "w+")
-                _file.write(json.dumps(response))
-                #Send log to server log file
-                log.trace().info("Created file in path %s/%s.json"
-                                 % (settings.UPLOADED_USER_PATH, response["firstname"]))
+        # Create file id
+        response["id"] = datetime.now().strftime("%Y%m%d%H%M")
+
+        # Check if file exists to avoid erros in server side
+        if not os.path.exists("%s/%s.json" % (settings.UPLOADED_USER_PATH, response["id"])):
+            # Create user json file
+            _create_file = open("%s/%s.json" % (settings.UPLOADED_USER_PATH, response["id"]), "x")
+
+            # Send log to server log file
+            log.trace().info("Created file in path %s/%s.json"
+                             % (settings.UPLOADED_USER_PATH, response["id"]))
+
+            # Open user json file and write user data
+            _file = open("%s/%s.json" % (settings.UPLOADED_USER_PATH, response["id"]), "w+")
+
+            # Delete id from response data
+            response.pop("id", None)
+
+            # Write data to file
+            _file.write(json.dumps(response))
+
+        else:
+            # Open user json file and write user data
+            _file = open("%s/%s.json" % (settings.UPLOADED_USER_PATH, response["id"]), "w+")
+
+            # Send log to server log file
+            log.trace().info("Rewrited file in path %s/%s.json"
+                             % (settings.UPLOADED_USER_PATH, response["id"]))
+
+            # Delete id from response data
+            response.pop("id", None)
+
+            # Write data to file
+            _file.write(json.dumps(response))
 
         return json.dumps(response).encode(settings.ENCODING), "application/json", "utf-8", 201, keep_alive  # Created
+
+    elif method == "DELETE":
+        if headers["Content-Type"] != "application/x-www-form-urlencoded":
+            return None, None, None, 415, keep_alive  # Unsupported Media Type
+
+        # Get parameters from request
+        response = {}
+
+        if len(body) > 0:
+            parameters = body.split("&")
+            for parameter in parameters:
+                key, value = parameter.split("=")
+                response[key] = value
+
+        # Check if generated-id exists
+        if response["generated-id"]:
+            if os.path.exists("%s/%s.json" % (settings.UPLOADED_USER_PATH, response["generated-id"])):
+
+                # Delete file
+                os.remove("%s/%s.json" % (settings.UPLOADED_USER_PATH, response["generated-id"]))
+
+                # Send log to server log file
+                log.trace().info("Rewrited file in path %s/%s.json"
+                                 % (settings.UPLOADED_USER_PATH, response["generated-id"]))
+
+        # Return response to client
+        return json.dumps(response).encode(settings.ENCODING), "application/json", "utf-8", 200, keep_alive
     else:
         return None, None, None, 501, keep_alive  # Not Implemented
 
