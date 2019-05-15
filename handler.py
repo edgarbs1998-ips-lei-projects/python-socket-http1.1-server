@@ -1,4 +1,5 @@
 import base64
+import os
 import json
 import mimetypes
 import select
@@ -32,11 +33,11 @@ def thread(connection, address, log):
             # Parse client request
             method, url, headers, body, keep_alive = __parse_header(request)
             log.requests().info("Request received (address=%s; method=%s; url=%s)" %
-                                                         (str(address), method, url))
+                                (str(address), method, url))
 
             # Handle client request
             content, content_type, content_encoding, status, keep_live = __request(
-                method, url, headers, body, keep_alive)
+                method, url, headers, body, keep_alive, log)
 
             # Prepare HTTP response
             response = __response(status, content, content_type, content_encoding)
@@ -85,7 +86,7 @@ def __parse_header(request):
     return method, url, headers, body, keep_alive
 
 
-def __request(method, url, headers, body, keep_alive):
+def __request(method, url, headers, body, keep_alive, log):
     """Returns file content for client request"""
 
     if method == "HEAD" or method == "GET":
@@ -123,6 +124,24 @@ def __request(method, url, headers, body, keep_alive):
             for parameter in parameters:
                 key, value = parameter.split("=")
                 response[key] = value
+
+        if response["firstname"]:
+            if os.path.exists("%s/%s.json" % (settings.UPLOADED_USER_PATH, response["firstname"])):
+                # Open user json file and write user data
+                _file = open("%s/%s.json" % (settings.UPLOADED_USER_PATH, response["firstname"]), "w+")
+                _file.write(json.dumps(response))
+                #Send log to server log file
+                log.trace().info("Rewrited file in path %s/%s.json"
+                                 % (settings.UPLOADED_USER_PATH, response["firstname"]))
+            else:
+                # Create user json file
+                _create_file = open("%s/%s.json" % (settings.UPLOADED_USER_PATH, response["firstname"]), "x")
+                # Open user json file and write user data
+                _file = open("%s/%s.json" % (settings.UPLOADED_USER_PATH, response["firstname"]), "w+")
+                _file.write(json.dumps(response))
+                #Send log to server log file
+                log.trace().info("Created file in path %s/%s.json"
+                                 % (settings.UPLOADED_USER_PATH, response["firstname"]))
 
         return json.dumps(response).encode(settings.ENCODING), "application/json", "utf-8", 201, keep_alive  # Created
     else:
