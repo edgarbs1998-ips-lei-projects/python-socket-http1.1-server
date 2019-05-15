@@ -3,16 +3,22 @@ import json
 import mimetypes
 import select
 import socket
+import time
+
 import settings
 from datetime import datetime
+from cache import Cache
 
 
-def thread(connection, address, log):
-    """Handle received data from client"""
+def thread(connection, address, logger):
+    """Handle received data from client using a thread"""
+
+    # Init cahce system
+    cache = Cache(settings.CACHE_SIZE)
 
     try:
         # Connection received
-        log.trace().info("Connection from address %s ..." % str(address))
+        logger.trace().info("Connection from address %s ..." % str(address))
 
         while True:
             readable, writable, exceptional = select.select([connection], [], [connection], settings.KEEP_ALIVE_SECONDS)
@@ -21,22 +27,20 @@ def thread(connection, address, log):
 
             try:
                 request = connection.recv(settings.BUFSIZE).decode(settings.ENCODING)
-
                 if not request:
                     break
             except OSError:
                 break
 
-            log.trace().info("Received from address %s: %s" % (str(address), request))
+            logger.trace().info("Received from address %s: %s" % (str(address), request))
 
             # Parse client request
             method, url, headers, body, keep_alive = __parse_header(request)
-            log.requests().info("Request received (address=%s; method=%s; url=%s)" %
-                                                         (str(address), method, url))
+            logger.requests().info("Request received (address=%s; method=%s; url=%s)" % (str(address), method, url))
 
             # Handle client request
-            content, content_type, content_encoding, status, keep_live = __request(
-                method, url, headers, body, keep_alive)
+            content, content_type, content_encoding, status, keep_alive = __request(
+                cache, method, url, headers, body, keep_alive)
 
             # Prepare HTTP response
             response = __response(status, content, content_type, content_encoding)
@@ -44,20 +48,20 @@ def thread(connection, address, log):
             # Return HTTP response
             connection.sendall(response)
 
-            if keep_live is False:
+            if keep_alive is False:
                 break
 
         # Close client connection
         connection.shutdown(socket.SHUT_RDWR)
         connection.close()
 
-        log.trace().info("Communication from address %s has been terminated..." % str(address))
+        logger.trace().info("Communication from address %s has been terminated..." % str(address))
 
     except socket.error as error:
         connection.shutdown(socket.SHUT_RDWR)
         connection.close()
 
-        log.trace().error("An error has occurred while processing connection from %s: %s" % (str(address), error))
+        logger.trace().error("An error has occurred while processing connection from %s: %s" % (str(address), error))
 
 
 def __parse_header(request):
@@ -85,7 +89,7 @@ def __parse_header(request):
     return method, url, headers, body, keep_alive
 
 
-def __request(method, url, headers, body, keep_alive):
+def __request(cache, method, url, headers, body, keep_alive):
     """Returns file content for client request"""
 
     if method == "HEAD" or method == "GET":
@@ -103,15 +107,28 @@ def __request(method, url, headers, body, keep_alive):
 
         if url == "/":
             url = "/index.html"
+        file_path = settings.HTDOCS_PATH + url
 
-        file_type, file_encoding = mimetypes.guess_type(settings.HTDOCS_PATH + url, True)
+        # Check if requested file is on the cache
+        file_content = cache.get(file_path)
 
-        try:
-            # Return file content
-            with open(settings.HTDOCS_PATH + url, "rb") as file:
-                return file.read(), file_type, file_encoding, "HEAD" if method == "HEAD" else 200, keep_alive  # HEAD / OK
-        except FileNotFoundError:
-            return None, None, None, 404, keep_alive  # Not Found
+        file_type, file_encoding = mimetypes.guess_type(file_path, True)
+
+        if file_content is None:
+            try:
+                # Simulate disk loading time of 100ms for cache system
+                time.sleep(0.1)
+
+                # Return file content
+                with open(file_path, "rb") as file:
+                    file_content = file.read()
+
+                # Update the cache with the newly opened file
+                cache.update(file_path, file_content)
+            except FileNotFoundError:
+                return None, None, None, 404, keep_alive  # Not Found
+
+        return file_content, file_type, file_encoding, "HEAD" if method == "HEAD" else 200, keep_alive  # HEAD / OK
     elif method == "POST":
         if headers["Content-Type"] != "application/x-www-form-urlencoded":
             return None, None, None, 415, keep_alive  # Unsupported Media Type
@@ -141,7 +158,7 @@ def __response(status_code, content, content_type, content_encoding):
         status = "201 Created"
     elif status_code == 401:
         status = "401 Unauthorized Status"
-        headers.append("WWW-Authenticate: Basic realm='Access Private Folder', charset='UTF-8'")
+        headers.append("WWW-Authenticate: Basic realm='Access Private Zone', charset='UTF-8'")
     elif status_code == 404:
         status = "404 Not Found"
         content = "Requested resource not found".encode(settings.ENCODING)
