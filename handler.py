@@ -4,16 +4,15 @@ import mimetypes
 import select
 import socket
 import settings
-import logging
 from datetime import datetime
 
 
-def thread(connection, address):
+def thread(connection, address, log):
     """Handle received data from client"""
 
     try:
         # Connection received
-        logging.getLogger(settings.LOG_TRACE).info("Connection from address %s ..." % str(address))
+        log.trace().info("Connection from address %s ..." % str(address))
 
         while True:
             readable, writable, exceptional = select.select([connection], [], [connection], settings.KEEP_ALIVE_SECONDS)
@@ -28,11 +27,11 @@ def thread(connection, address):
             except OSError:
                 break
 
-            logging.getLogger(settings.LOG_TRACE).info("Received from address %s: %s" % (str(address), request))
+            log.trace().info("Received from address %s: %s" % (str(address), request))
 
             # Parse client request
             method, url, headers, body, keep_alive = __parse_header(request)
-            logging.getLogger(settings.LOG_REQUEST).info("Request received (address=%s; method=%s; url=%s)" %
+            log.requests().info("Request received (address=%s; method=%s; url=%s)" %
                                                          (str(address), method, url))
 
             # Handle client request
@@ -52,13 +51,13 @@ def thread(connection, address):
         connection.shutdown(socket.SHUT_RDWR)
         connection.close()
 
-        logging.getLogger(settings.LOG_TRACE).info("Communication from address %s has been terminated..." % str(address))
+        log.trace().info("Communication from address %s has been terminated..." % str(address))
 
     except socket.error as error:
         connection.shutdown(socket.SHUT_RDWR)
         connection.close()
 
-        logging.getLogger(settings.LOG_TRACE).error("An error has occurred while processing connection from %s: %s" % (str(address), error))
+        log.trace().error("An error has occurred while processing connection from %s: %s" % (str(address), error))
 
 
 def __parse_header(request):

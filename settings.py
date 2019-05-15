@@ -11,12 +11,10 @@ BUFSIZE = 4096
 ENCODING = "utf-8"
 
 # Log settings
-LOG_TRACE = "trace"
 LOG_TRACE_FILE = "./logs/trace.txt"
-LOG_REQUEST = "requests"
 LOG_REQUESTS_FILE = "./logs/log.txt"
-LOG_FORMAT = "[%(asctime)s - %(levelname)s] - %(message)s"
 LOG_LEVEL = "DEBUG"
+LOG_FORMAT = "[%(asctime)s - %(name)s - %(levelname)s] - %(message)s"
 
 # Private auth
 PRIVATE_USERNAME = "admin"

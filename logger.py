@@ -1,24 +1,36 @@
 import logging
 
 
-def init(trace_logger, trace_file, requests_logger, requests_file, level, formatter, date_format):
-    # Trace log configuration startup
-    trace_filehandler = logging.FileHandler(trace_file)
-    trace_filehandler.setLevel(logging.getLevelName(level))
-    trace_formatter = logging.Formatter(formatter)
-    trace_filehandler.setFormatter(trace_formatter)
-    logging.getLogger(trace_logger).addHandler(trace_filehandler)
+class Logger:
+    def __init__(self, trace_file, requests_file, level, formatter, date_format):
 
-    # Requests log configuration startup
-    request_filehandler = logging.FileHandler(requests_file)
-    request_filehandler.setLevel(logging.INFO)
-    request_formatter = logging.Formatter(formatter)
-    request_filehandler.setFormatter(request_formatter)
-    logging.getLogger(requests_logger).addHandler(request_filehandler)
+        # Class parameters
+        self.logger_trace = logging.getLogger("trace")
+        self.logger_requests = logging.getLogger("requests")
 
-    # Console log configuration startup (log trace messages with level INFO or higher)
-    console = logging.StreamHandler()
-    console.setLevel(logging.INFO)
-    console_formatter = logging.Formatter(fmt=formatter, datefmt=date_format)
-    console.setFormatter(console_formatter)
-    logging.getLogger(trace_logger).addHandler(console)
+        # Console log configuration startup (log to console every INFO or higher level message, independent of logger)
+        logging.basicConfig(level=logging.INFO,
+                            format=formatter,
+                            datefmt=date_format
+                            )
+
+        # Setup log messages formatter
+        formatter = logging.Formatter(fmt=formatter, datefmt=date_format)
+
+        # Trace log configuration startup
+        trace_handler = logging.FileHandler(trace_file, mode="a")
+        trace_handler.setLevel(logging.getLevelName(level))
+        trace_handler.setFormatter(formatter)
+        self.logger_trace.addHandler(trace_handler)
+
+        # Trace log configuration startup
+        requests_handler = logging.FileHandler(requests_file, mode="a")
+        requests_handler.setLevel(logging.getLevelName(level))
+        requests_handler.setFormatter(formatter)
+        self.logger_requests.addHandler(requests_handler)
+
+    def trace(self):
+        return self.logger_trace
+
+    def requests(self):
+        return self.logger_requests
