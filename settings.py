@@ -1,3 +1,6 @@
+# Server version
+VERSION = "1.0.0"
+
 # Server settings
 SERVER_HOST = "0.0.0.0"
 SERVER_PORT = 8000

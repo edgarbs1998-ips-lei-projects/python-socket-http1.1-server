@@ -6,7 +6,7 @@ class Cache:
         self.__counter = {}
         self.__cache = {}
 
-    def update(self, name, content):
+    def update(self, name, content, last_modified):
         if name in self.__counter:
             self.__counter[name] += 1
         else:
@@ -22,9 +22,14 @@ class Cache:
             if cache_name in self.__cache:
                 temp_cache[cache_name] = self.__cache[cache_name]
             elif name == cache_name:
-                temp_cache[cache_name] = content
+                temp_cache[cache_name] = {
+                    "content": content,
+                    "last_modified": last_modified
+                }
 
-        self.__cache = temp_cache.copy()
+        self.__cache = dict(temp_cache)
 
     def get(self, name):
-        return self.__cache[name] if name in self.__cache else None
+        if name in self.__cache:
+            return self.__cache[name]["content"], self.__cache[name]["last_modified"]
+        return None, None

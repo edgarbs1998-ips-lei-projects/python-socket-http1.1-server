@@ -1,12 +1,16 @@
 import base64
+import hashlib
 import json
 import mimetypes
+import os
 import select
 import socket
+import sys
 import time
 
 import settings
 from datetime import datetime
+
 from cache import Cache
 
 
@@ -39,11 +43,11 @@ def thread(connection, address, logger):
             logger.requests().info("Request received (address=%s; method=%s; url=%s)" % (str(address), method, url))
 
             # Handle client request
-            content, content_type, content_encoding, status, keep_alive = __request(
+            content, content_type, content_encoding, content_lastmodified, status, keep_alive = __request(
                 cache, method, url, headers, body, keep_alive)
 
             # Prepare HTTP response
-            response = __response(status, content, content_type, content_encoding)
+            response = __response(status, content, content_type, content_encoding, content_lastmodified)
 
             # Return HTTP response
             connection.sendall(response)
@@ -98,19 +102,19 @@ def __request(cache, method, url, headers, body, keep_alive):
                 (settings.PRIVATE_USERNAME + ":" + settings.PRIVATE_PASSWORD).encode("utf-8"))
 
             if "Authorization" not in headers:
-                return None, None, None, 401, keep_alive
+                return None, None, None, None, 401, keep_alive
 
             auth_method, auth_credentials = headers["Authorization"].split()
             auth_credentials = auth_credentials.encode("utf-8")
             if auth_credentials != base64_auth:
-                return None, None, None, 401, keep_alive
+                return None, None, None, None, 401, keep_alive
 
         if url == "/":
             url = "/index.html"
         file_path = settings.HTDOCS_PATH + url
 
         # Check if requested file is on the cache
-        file_content = cache.get(file_path)
+        file_content, file_lastmodified = cache.get(file_path)
 
         file_type, file_encoding = mimetypes.guess_type(file_path, True)
 
@@ -123,15 +127,19 @@ def __request(cache, method, url, headers, body, keep_alive):
                 with open(file_path, "rb") as file:
                     file_content = file.read()
 
-                # Update the cache with the newly opened file
-                cache.update(file_path, file_content)
-            except FileNotFoundError:
-                return None, None, None, 404, keep_alive  # Not Found
+                # Get last modification time of the file
+                file_lastmodified = os.path.getmtime(file_path)
 
-        return file_content, file_type, file_encoding, "HEAD" if method == "HEAD" else 200, keep_alive  # HEAD / OK
+                # Update the cache with the newly opened file
+                cache.update(file_path, file_content, file_lastmodified)
+            except (FileNotFoundError, OSError):
+                return None, None, None, None, 404, keep_alive  # Not Found
+
+        return file_content, file_type, file_encoding, file_lastmodified,\
+               "HEAD" if method == "HEAD" else 200, keep_alive  # HEAD / OK
     elif method == "POST":
         if headers["Content-Type"] != "application/x-www-form-urlencoded":
-            return None, None, None, 415, keep_alive  # Unsupported Media Type
+            return None, None, None, None, 415, keep_alive  # Unsupported Media Type
 
         response = {}
 
@@ -141,12 +149,13 @@ def __request(cache, method, url, headers, body, keep_alive):
                 key, value = parameter.split("=")
                 response[key] = value
 
-        return json.dumps(response).encode(settings.ENCODING), "application/json", "utf-8", 201, keep_alive  # Created
+        return json.dumps(response).encode(
+            settings.ENCODING), "application/json", "utf-8", None, 201, keep_alive  # Created
     else:
-        return None, None, None, 501, keep_alive  # Not Implemented
+        return None, None, None, None, 501, keep_alive  # Not Implemented
 
 
-def __response(status_code, content, content_type, content_encoding):
+def __response(status_code, content, content_type, content_encoding, content_lastmodified):
     """Returns HTTP response"""
 
     headers = []
@@ -184,9 +193,16 @@ def __response(status_code, content, content_type, content_encoding):
     headers.append("Connection: keep-alive")
     headers.append("Content-Type: %s" % content_type)
     headers.append("Content-Length: %d" % len(content))
+    headers.append("Content-MD5: %s" % hashlib.md5(content))
+    headers.append("Server: python-socket-http/%s python/%s" % (settings.VERSION, sys.version))
+    # TODO Implement Cache-Control
 
     if content_encoding is not None:
         headers.append("Content-Encoding: %s" % content_encoding)
+
+    if content_lastmodified is not None:
+        headers.append("Last-Modified: %s" %
+                       datetime.fromtimestamp(content_lastmodified).strftime("%a, %d %b %Y %H:%M:%S GMT"))
 
     header = "\n".join(headers)
     response = (header + "\n\n").encode(settings.ENCODING)
