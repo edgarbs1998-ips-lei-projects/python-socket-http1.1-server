@@ -1,3 +1,6 @@
+# Server version
+VERSION = "1.0.0"
+
 # Server settings
 SERVER_HOST = "0.0.0.0"
 SERVER_PORT = 8000
@@ -5,13 +8,14 @@ DATETIME_FORMAT = "%d/%m/%Y %H:%M:%S"
 HTDOCS_PATH = "./htdocs"
 SOCKET_TIMEOUT = 30
 KEEP_ALIVE_SECONDS = 10
+CACHE_SIZE = 2
 UPLOADED_USER_PATH = "./htdocs/uploaded"
 
 # Communication settings
 BUFSIZE = 4096
 ENCODING = "utf-8"
 
-# Log settings
+# Logger settings
 LOG_TRACE_FILE = "./logs/trace.txt"
 LOG_REQUESTS_FILE = "./logs/log.txt"
 LOG_LEVEL = "DEBUG"
