@@ -214,6 +214,10 @@ dmypy.json
 # Ignore pickle persistence files
 *.pickle
 
-# Ignore logs folder
+# Ignore log files
 logs/*
 !logs/.gitkeep
+
+# Ignore uploaded files
+htdocs/uploaded/*
+!htdocs/uploaded/.gitkeep
