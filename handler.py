@@ -19,7 +19,7 @@ def thread(connection, address, logger):
     """Handle received data from client using a thread"""
 
     # Init cahce system
-    cache = Cache(settings.CACHE_SIZE)
+    cache = Cache(settings.SERVER_CACHE_SIZE)
 
     try:
         # Connection received
@@ -117,19 +117,27 @@ def __request(logger, cache, method, url, headers, body, keep_alive):
         # Check if requested file is on the cache
         file_content, file_lastmodified = cache.get(file_path)
 
+        # Check if browser cache is valid
+        if __is_browser_cache_valid(file_lastmodified, method, headers):
+            return None, None, None, None, 304, keep_alive
+
         file_type, file_encoding = mimetypes.guess_type(file_path, True)
 
         if file_content is None:
             try:
                 # Simulate disk loading time of 100ms for cache system
-                time.sleep(0.1)
+                time.sleep(settings.SIMULATE_DISK_DELAY)
+
+                # Get last modification time of the file
+                file_lastmodified = os.path.getmtime(file_path)
+
+                # Check if browser cache is valid
+                if __is_browser_cache_valid(file_lastmodified, method, headers):
+                    return None, None, None, None, 304, keep_alive
 
                 # Return file content
                 with open(file_path, "rb") as file:
                     file_content = file.read()
-
-                # Get last modification time of the file
-                file_lastmodified = os.path.getmtime(file_path)
 
                 # Update the cache with the newly opened file
                 cache.update(file_path, file_content, file_lastmodified)
@@ -226,8 +234,12 @@ def __response(status_code, content, content_type, content_encoding, content_las
     # Build HTTP response
     if status_code == 200:
         status = "200 OK"
+        if settings.CLIENT_CACHE_ENABLE:
+            headers.append("Cache-Control: public, max-age=%d" % settings.CLIENT_CACHE_AGE)
     elif status_code == 201:
         status = "201 Created"
+    elif status_code == 304:
+        status = "304 Not Modified"
     elif status_code == 401:
         status = "401 Unauthorized Status"
         headers.append("WWW-Authenticate: Basic realm='Access Private Zone', charset='UTF-8'")
@@ -258,14 +270,16 @@ def __response(status_code, content, content_type, content_encoding, content_las
     headers.append("Content-Length: %d" % len(content))
     headers.append("Content-MD5: %s" % hashlib.md5(content))
     headers.append("Server: python-socket-http/%s python/%s" % (settings.VERSION, sys.version))
-    # TODO Implement Cache-Control
 
     if content_encoding is not None:
         headers.append("Content-Encoding: %s" % content_encoding)
 
     if content_lastmodified is not None:
-        headers.append("Last-Modified: %s" %
-                       datetime.fromtimestamp(content_lastmodified).strftime("%a, %d %b %Y %H:%M:%S GMT"))
+        if content_lastmodified > datetime.now().timestamp():
+            headers.append("Last-Modified: %s" % datetime.now().strftime("%a, %d %b %Y %H:%M:%S GMT"))
+        else:
+            headers.append("Last-Modified: %s" %
+                           datetime.fromtimestamp(content_lastmodified).strftime("%a, %d %b %Y %H:%M:%S GMT"))
 
     header = "\n".join(headers)
     response = (header + "\n\n").encode(settings.ENCODING)
@@ -273,3 +287,14 @@ def __response(status_code, content, content_type, content_encoding, content_las
 
     # Return encoded response
     return response
+
+
+def __is_browser_cache_valid(lastmodified, method, headers):
+    """Check if browser cache has the most recent file version """
+
+    if settings.CLIENT_CACHE_ENABLE and method == "GET" and lastmodified is not None and "If-Modified-Since" in headers:
+        cache_lastmodified = datetime.strptime(headers["If-Modified-Since"],
+                                               "%a, %d %b %Y %H:%M:%S GMT").timestamp()
+        if cache_lastmodified <= datetime.now().timestamp() and int(cache_lastmodified) == int(lastmodified):
+            return True
+    return False
