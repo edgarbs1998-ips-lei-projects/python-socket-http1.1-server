@@ -7,6 +7,7 @@ import select
 import socket
 import sys
 import time
+import uuid
 
 import settings
 from datetime import datetime
@@ -44,7 +45,7 @@ def thread(connection, address, logger):
 
             # Handle client request
             content, content_type, content_encoding, content_lastmodified, status, keep_alive = __request(
-                cache, method, url, headers, body, keep_alive)
+                logger, cache, method, url, headers, body, keep_alive)
 
             # Prepare HTTP response
             response = __response(status, content, content_type, content_encoding, content_lastmodified)
@@ -93,7 +94,7 @@ def __parse_header(request):
     return method, url, headers, body, keep_alive
 
 
-def __request(cache, method, url, headers, body, keep_alive):
+def __request(logger, cache, method, url, headers, body, keep_alive):
     """Returns file content for client request"""
 
     if method == "HEAD" or method == "GET":
@@ -149,6 +150,7 @@ def __request(cache, method, url, headers, body, keep_alive):
         if headers["Content-Type"] != "application/x-www-form-urlencoded":
             return None, None, None, None, 415, keep_alive  # Unsupported Media Type
 
+        # Get parameters from request
         response = {}
 
         if len(body) > 0:
@@ -157,8 +159,106 @@ def __request(cache, method, url, headers, body, keep_alive):
                 key, value = parameter.split("=")
                 response[key] = value
 
-        return json.dumps(response).encode(
-            settings.ENCODING), "application/json", "utf-8", None, 201, keep_alive  # Created
+        while True:
+            # Generate a random unique identifier
+            post_uid = str(uuid.uuid4())
+            post_file_path = "%s/%s.json" % (settings.UPLOADED_PATH, post_uid)
+
+            # Check if the generate identifier already exists and if so regenerate it
+            if not os.path.exists(post_file_path):
+                break
+
+        # Create the file and open it
+        with open(post_file_path, "w") as post_file:
+            logger.trace().info("Created %s file" % post_file_path)
+
+            # Write post data to the file
+            json.dump(response, post_file, indent=4)
+
+        response["uid"] = post_uid
+        return json.dumps(response).encode(settings.ENCODING),\
+               "application/json", "utf-8", None, 201, keep_alive  # Created
+    elif method == "DELETE":
+        delete_path = "%s/%s.json" % (settings.UPLOADED_PATH, url)
+
+        # Check if specified file exists
+        if os.path.exists(delete_path):
+            # Delete file
+            os.remove(delete_path)
+            logger.trace().info("Deleted %s file" % delete_path)
+
+            # Return response to client
+            return None, None, None, None, 204, keep_alive
+        else:
+            # Return response to client
+            return None, None, None, None, 404, keep_alive
+    elif method == "PUT":
+        if headers["Content-Type"] != "application/x-www-form-urlencoded":
+            return None, None, None, None, 415, keep_alive  # Unsupported Media Type
+
+        put_path = "%s/%s.json" % (settings.UPLOADED_PATH, url)
+
+        # Check if specified file exists
+        if not os.path.exists(put_path):
+            # Return response to client
+            return None, None, None, None, 404, keep_alive
+
+        # Get parameters from request
+        put_data = {}
+
+        if len(body) > 0:
+            parameters = body.split("&")
+            for parameter in parameters:
+                key, value = parameter.split("=")
+                put_data[key] = value
+
+        # Open the file
+        with open(put_path, "w") as put_file:
+            # Write post data to the file
+            json.dump(put_data, put_file, indent=4)
+            logger.trace().info("Updated %s file" % put_path)
+
+        # Return response to client
+        return None, None, None, None, 204, keep_alive
+    elif method == "PATCH":
+        if headers["Content-Type"] != "application/x-www-form-urlencoded":
+            return None, None, None, None, 415, keep_alive  # Unsupported Media Type
+
+        patch_path = "%s/%s.json" % (settings.UPLOADED_PATH, url)
+
+        # Check if specified file exists
+        if not os.path.exists(patch_path):
+            # Return response to client
+            return None, None, None, None, 404, keep_alive
+
+        try:
+            # Read file json data
+            with open(patch_path, "r+") as patch_file:
+                patch_file_data = json.load(patch_file)
+
+                # Update/create json file with passed parameters
+                if len(body) > 0:
+                    parameters = body.split("&")
+                    for parameter in parameters:
+                        key, value = parameter.split("=")
+                        patch_file_data[key] = value
+
+                # Delete file content
+                patch_file.seek(0)
+                patch_file.truncate()
+
+                # Write updated data to the file
+                patch_file.write(json.dumps(patch_file_data, indent=4))
+                logger.trace().info("Updated %s file" % patch_file)
+        except json.JSONDecodeError as error:
+            logger.trace().error("An error has occurred while processing PATCH request due to malformed JSON: %s" %
+                                 error)
+
+            # Return response to client
+            return None, None, None, None, None, keep_alive
+
+        # Return response to client
+        return None, None, None, None, 204, keep_alive
     else:
         return None, None, None, None, 501, keep_alive  # Not Implemented
 
@@ -175,6 +275,8 @@ def __response(status_code, content, content_type, content_encoding, content_las
             headers.append("Cache-Control: public, max-age=%d" % settings.CLIENT_CACHE_AGE)
     elif status_code == 201:
         status = "201 Created"
+    elif status_code == 204:
+        status = "204 No Content"
     elif status_code == 304:
         status = "304 Not Modified"
     elif status_code == 401:
