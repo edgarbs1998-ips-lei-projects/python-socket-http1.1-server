@@ -6,9 +6,7 @@ SERVER_HOST = "0.0.0.0"
 SERVER_PORT = 8000
 DATETIME_FORMAT = "%d/%m/%Y %H:%M:%S"
 HTDOCS_PATH = "./htdocs"
-SOCKET_TIMEOUT = 30
-KEEP_ALIVE_SECONDS = 10
-UPLOADED_PATH = "%s/%s" % (HTDOCS_PATH, "uploaded")
+UPLOADED_PATH = "%s/uploaded" % HTDOCS_PATH
 
 # Cache settings
 SIMULATE_DISK_DELAY = 0.1
@@ -19,6 +17,8 @@ CLIENT_CACHE_AGE = 31536000  # Seconds
 # Communication settings
 BUFSIZE = 4096
 ENCODING = "utf-8"
+SOCKET_TIMEOUT = 30
+KEEP_ALIVE_SECONDS = 10
 
 # Logger settings
 LOG_TRACE_FILE = "./logs/trace.txt"
