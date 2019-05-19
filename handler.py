@@ -8,6 +8,8 @@ import select
 import socket
 import sys
 import time
+import random
+import string
 
 import settings
 from datetime import datetime
@@ -159,20 +161,24 @@ def __request(logger, cache, method, url, headers, body, keep_alive):
                 key, value = parameter.split("=")
                 response[key] = value
 
+        # Random string for file creation with 3 random letters
+        letters = string.ascii_lowercase
+        token = ''.join(random.sample(letters, 3))
+
         # Create file id
-        response["id"] = datetime.now().strftime("%Y%m%d%H%M")
+        response["id"] = "%s-%s" % (datetime.now().strftime("%Y%m%d%H%M%S"), token)
 
         # Check if file exists to avoid erros in server side
-        if not os.path.exists("%s/%s.json" % (settings.UPLOADED_USER_PATH, response["id"])):
+        if not os.path.exists("%s/%s.json" % (settings.UPLOADED_PATH, response["id"])):
             # Create user json file
-            _create_file = open("%s/%s.json" % (settings.UPLOADED_USER_PATH, response["id"]), "x")
+            _create_file = open("%s/%s.json" % (settings.UPLOADED_PATH, response["id"]), "x")
 
             # Send log to server log file
             logger.trace().info("Created file in path %s/%s.json"
-                             % (settings.UPLOADED_USER_PATH, response["id"]))
+                             % (settings.UPLOADED_PATH, response["id"]))
 
             # Open user json file and write user data
-            _file = open("%s/%s.json" % (settings.UPLOADED_USER_PATH, response["id"]), "w+")
+            _file = open("%s/%s.json" % (settings.UPLOADED_PATH, response["id"]), "w+")
 
             # Delete id from response data
             response.pop("id", None)
@@ -181,12 +187,12 @@ def __request(logger, cache, method, url, headers, body, keep_alive):
             _file.write(json.dumps(response))
 
         else:
-            # Open user json file and write user data
-            _file = open("%s/%s.json" % (settings.UPLOADED_USER_PATH, response["id"]), "w+")
+            # Open json file and write data
+            _file = open("%s/%s.json" % (settings.UPLOADED_PATH, response["id"]), "w+")
 
             # Send log to server log file
             logger.trace().info("Rewrited file in path %s/%s.json"
-                             % (settings.UPLOADED_USER_PATH, response["id"]))
+                             % (settings.UPLOADED_PATH, response["id"]))
 
             # Delete id from response data
             response.pop("id", None)
@@ -211,17 +217,49 @@ def __request(logger, cache, method, url, headers, body, keep_alive):
 
         # Check if generated-id exists
         if response["generated-id"]:
-            if os.path.exists("%s/%s.json" % (settings.UPLOADED_USER_PATH, response["generated-id"])):
+            if os.path.exists("%s/%s.json" % (settings.UPLOADED_PATH, response["generated-id"])):
 
                 # Delete file
-                os.remove("%s/%s.json" % (settings.UPLOADED_USER_PATH, response["generated-id"]))
+                os.remove("%s/%s.json" % (settings.UPLOADED_PATH, response["generated-id"]))
 
                 # Send log to server log file
                 logger.trace().info("Deleted file in path %s/%s.json"
-                                 % (settings.UPLOADED_USER_PATH, response["generated-id"]))
+                                 % (settings.UPLOADED_PATH, response["generated-id"]))
 
         # Return response to client
-        return json.dumps(response).encode(settings.ENCODING), "application/json", "utf-8", None, 200, keep_alive
+        return None, None, None, None, 204, keep_alive
+    elif method == "PATCH":
+        if headers["Content-Type"] != "application/x-www-form-urlencoded":
+            return None, None, None, None, 415, keep_alive  # Unsupported Media Type
+
+        # Get parameters from request
+        response = {}
+
+        if len(body) > 0:
+            parameters = body.split("&")
+            for parameter in parameters:
+                key, value = parameter.split("=")
+                response[key] = value
+
+        # Check if generated-id exists
+        if response["generated-id"]:
+            if os.path.exists("%s/%s.json" % (settings.UPLOADED_PATH, response["generated-id"])):
+
+                # Open json file and write data
+                _file = open("%s/%s.json" % (settings.UPLOADED_PATH, response["generated-id"]), "w+")
+
+                # Send log to server log file
+                logger.trace().info("Edited file in path %s/%s.json"
+                                 % (settings.UPLOADED_PATH, response["generated-id"]))
+
+                # Delete id from response data
+                response.pop("generated-id", None)
+
+                # Write data to file
+                _file.write(json.dumps(response))
+
+        # Return response to client
+        return None, None, None, None, 204, keep_alive
     else:
         return None, None, None, None, 501, keep_alive  # Not Implemented
 
@@ -252,6 +290,8 @@ def __response(status_code, content, content_type, content_encoding, content_las
     elif status_code == 501:
         status = "501 Not Implemented"
         content = "Request method is not supported by the server".encode(settings.ENCODING)
+    elif status_code == 204:
+        status = "204 No content"
     elif status_code == "HEAD":
         status = "200 OK"
     else:

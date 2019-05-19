@@ -8,6 +8,7 @@ DATETIME_FORMAT = "%d/%m/%Y %H:%M:%S"
 HTDOCS_PATH = "./htdocs"
 SOCKET_TIMEOUT = 30
 KEEP_ALIVE_SECONDS = 10
+UPLOADED_PATH = "%s/%s" % (HTDOCS_PATH, "uploaded")
 
 # Cache settings
 SIMULATE_DISK_DELAY = 0.1
